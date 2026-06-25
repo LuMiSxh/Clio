@@ -1,0 +1,17 @@
+[package]
+name = "clio"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+zip = "2"
+rayon = "1"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "avif"] }
+ravif = "0.13"
+rav1e = { version = "0.8", default-features = false }
+webp = "0.3"
+thiserror = "2"
+clap = { version = "4", features = ["derive"] }
+lightningcss = "1.0.0-alpha"
+quick-xml = "0.37"
+ttf2woff2 = { version = "0.13", default-features = false }

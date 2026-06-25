@@ -1,0 +1,34 @@
+// AVIF
+pub const AVIF_QUALITY_TINY: f32 = 63.0;
+pub const AVIF_QUALITY_SMALL: f32 = 60.0;
+pub const AVIF_QUALITY_MEDIUM: f32 = 56.0;
+pub const AVIF_QUALITY_LARGE: f32 = 52.0;
+pub const AVIF_QUALITY_HUGE: f32 = 48.0;
+
+pub const AVIF_SPEED_TINY: u8 = 7;
+pub const AVIF_SPEED_SMALL: u8 = 7;
+pub const AVIF_SPEED_MEDIUM: u8 = 6;
+pub const AVIF_SPEED_LARGE: u8 = 5;
+pub const AVIF_SPEED_HUGE: u8 = 4;
+
+pub const AVIF_ALPHA_QUALITY: f32 = 1.0;
+pub const AVIF_GRAYSCALE_QUALITY_REDUCTION: f32 = 7.0;
+
+pub const AVIF_TINY_THRESHOLD: u64 = 300_000;
+pub const AVIF_SMALL_THRESHOLD: u64 = 1_000_000;
+pub const AVIF_MEDIUM_THRESHOLD: u64 = 3_000_000;
+pub const AVIF_LARGE_THRESHOLD: u64 = 6_000_000;
+
+// WebP
+pub const WEBP_QUALITY_TINY: f32 = 78.0;
+pub const WEBP_QUALITY_SMALL: f32 = 76.0;
+pub const WEBP_QUALITY_MEDIUM: f32 = 73.0;
+pub const WEBP_QUALITY_LARGE: f32 = 70.0;
+pub const WEBP_QUALITY_HUGE: f32 = 68.0;
+
+pub const WEBP_GRAYSCALE_QUALITY_REDUCTION: f32 = 5.0;
+
+pub const WEBP_TINY_THRESHOLD: u64 = 300_000;
+pub const WEBP_SMALL_THRESHOLD: u64 = 1_000_000;
+pub const WEBP_MEDIUM_THRESHOLD: u64 = 3_000_000;
+pub const WEBP_LARGE_THRESHOLD: u64 = 6_000_000;
