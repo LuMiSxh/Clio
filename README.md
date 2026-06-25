@@ -27,7 +27,7 @@ Named after Clio, the Greek muse of history and keeper of stories. This tool aim
 
 Clio re-encodes images within the EPUB to AVIF (default) or WebP. It adjusts compression settings based on image resolution and type (treating line art differently than full-color illustrations). Duplicate images across chapters are reused to save space, often resulting in reduction rates around **~90%**.
 
-This pipeline is shared with [Thasia](https://github.com/LuMiSxh/Thasia) and has been tested across various manga and illustrated light novels.
+This pipeline is shared with [Thasia](https://github.com/LuMiSxh/Thasia) and has been tested across various images and use cases.
 
 ### CSS Cleanup
 
