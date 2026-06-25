@@ -2,11 +2,11 @@
 
 # Clio
 
-**An EPUB optimizer that actually moves the needle**
+**A command-line EPUB optimizer and compressor**
 
-Clio converts images to AVIF or WebP, tree-shakes and consolidates CSS, upgrades fonts to WOFF2,
-and rewrites HTML — all without touching the reading experience.
-Single file or entire library, one command.
+Clio compresses EPUB files by converting images to AVIF or WebP, removing unused CSS,
+upgrading fonts to WOFF2, and rewriting internal HTML.
+You can process single files or entire folders with a single command.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
@@ -17,11 +17,7 @@ Single file or entire library, one command.
 
 ---
 
-In Greek mythology, Clio is the muse of history — keeper of stories, guardian of memory.
-This Clio does the same thing, just with fewer megabytes.
-She takes your EPUB library, compresses it down to a fraction of its size, and hands it back
-looking exactly the same. No quality loss you'd notice. No format changes. No broken readers.
-Just the story, lighter.
+Named after Clio, the Greek muse of history and keeper of stories. This tool aims to preserve your EPUB library while significantly reducing its file size. It optimizes the underlying assets while keeping the formatting, structure, and readability exactly the same as the original files.
 
 ---
 
@@ -29,43 +25,29 @@ Just the story, lighter.
 
 ### Image Compression
 
-The main event. Clio re-encodes every image in the EPUB using AVIF (default) or WebP.
-It auto-tunes quality and encoder speed per image based on resolution and tone —
-line art gets treated differently from full-color illustrations. Identical images across
-chapters are encoded once and reused. Typical reduction: **~90%**.
+Clio re-encodes images within the EPUB to AVIF (default) or WebP. It adjusts compression settings based on image resolution and type (treating line art differently than full-color illustrations). Duplicate images across chapters are reused to save space, often resulting in reduction rates around **~90%**.
 
-This compression pipeline is the same one powering [Thasia](https://github.com/LuMiSxh/Thasia),
-tested extensively against real-world manga and illustrated novel content.
+This pipeline is shared with [Thasia](https://github.com/LuMiSxh/Thasia) and has been tested across various manga and illustrated light novels.
 
-### CSS Tree-Shaking
+### CSS Cleanup
 
-All CSS files in the EPUB are concatenated, minified via [lightningcss](https://lightningcss.dev),
-and then filtered: any rule whose selectors don't appear in the actual HTML is dropped.
-The result is written to a single `_clio.css` that every rewritten HTML file links to.
-Inline `style=""` attributes become generated classes and move into that file too.
+Merges and minifies all CSS files using [lightningcss](https://lightningcss.dev), then removes any style rules that aren't used in the book's HTML. The output is saved to a single `_clio.css` file. Inline `style=""` attributes are also extracted into generated CSS classes.
 
 ### Font Conversion
 
-TTF and OTF fonts are re-encoded as WOFF2 using a pure-Rust encoder with Brotli compression.
-References in CSS `url()` calls are updated automatically.
+Converts TTF and OTF fonts to WOFF2 using Brotli compression, and automatically updates the respective CSS `@font-face` rules.
 
 ### HTML Rewriting
 
-Every XHTML file is processed with an event-streaming XML parser so that `<?xml?>` declarations,
-`epub:type` attributes, and all other namespace-prefixed content pass through untouched.
-Stylesheet links are replaced with the consolidated `_clio.css` reference, and image `src`/`href`
-attributes are updated to the new extension.
+Processes XHTML files using a streaming XML parser to ensure XML declarations, `epub:type` attributes, and namespaces remain intact. Stylesheet links are updated to point to the new `_clio.css`, and image references are updated to reflect the new formats.
 
-### Batch Mode
+### Batch Processing
 
-Point Clio at a directory and it processes every EPUB inside it, writing results to
-`<directory>-optimized/` with original filenames preserved. Per-book stats, a running
-failure count, and a total at the end.
+Point the tool at a folder to process every EPUB inside it. Optimized files are saved to a new `<directory>-optimized/` folder with their original names preserved. Summary statistics are displayed at the end.
 
-### OPF Metadata
+### Metadata Tagging
 
-Each output EPUB gets a `<meta property="clio:processed">true</meta>` tag injected
-into its OPF metadata so you can tell at a glance which files have been through the pipeline.
+Injects a `<meta property="clio:processed">true</meta>` tag into the OPF file so processed books can easily be identified.
 
 ---
 
@@ -113,10 +95,10 @@ clio my-library/ --webp
 
 ### Options
 
-| Flag     | Description                                             |
-| -------- | ------------------------------------------------------- |
-| `--webp` | Encode images as WebP instead of AVIF                   |
-| `--json` | Output a single JSON object instead of streaming text   |
+| Flag     | Description                                           |
+| -------- | ----------------------------------------------------- |
+| `--webp` | Encode images as WebP instead of AVIF                 |
+| `--json` | Output a single JSON object instead of streaming text |
 
 ### What the output looks like
 
@@ -139,15 +121,15 @@ With `--json`, nothing is streamed. A single object is written to stdout when pr
 
 ```json
 {
-  "input": "vol-01.epub",
-  "output": "books-optimized/vol-01.epub",
-  "input_bytes": 39500000,
-  "output_bytes": 3700000,
-  "reduction_pct": 90.6,
-  "images": { "count": 24, "input_bytes": 40300000, "output_bytes": 3500000 },
-  "fonts":  { "count": 0,  "input_bytes": 0,        "output_bytes": 0 },
-  "css":    { "count": 1,  "input_bytes": 3000,      "output_bytes": 1700 },
-  "html":   { "count": 39 }
+    "input": "vol-01.epub",
+    "output": "books-optimized/vol-01.epub",
+    "input_bytes": 39500000,
+    "output_bytes": 3700000,
+    "reduction_pct": 90.6,
+    "images": { "count": 24, "input_bytes": 40300000, "output_bytes": 3500000 },
+    "fonts": { "count": 0, "input_bytes": 0, "output_bytes": 0 },
+    "css": { "count": 1, "input_bytes": 3000, "output_bytes": 1700 },
+    "html": { "count": 39 }
 }
 ```
 
@@ -170,16 +152,15 @@ Failed books appear in the array as `{"input": "...", "error": "..."}` and are c
 
 ## Results
 
-Results depend almost entirely on how image-heavy the source material is.
+The actual reduction rate depends on the volume of images in the source files.
 
-| Content type                        | AVIF       | WebP       |
-| ----------------------------------- | ---------- | ---------- |
-| Image-heavy (manga, illustrated LN) | ~90–93%    | ~86–89%    |
-| Mixed (some illustrations)          | ~50–75%    | ~45–70%    |
-| Text-only                           | ~10–30%    | ~10–25%    |
+| Content type                        | AVIF    | WebP    |
+| ----------------------------------- | ------- | ------- |
+| Image-heavy (manga, illustrated LN) | ~90–93% | ~86–89% |
+| Mixed (some illustrations)          | ~50–75% | ~45–70% |
+| Text-only                           | ~10–30% | ~10–25% |
 
-The CSS and HTML passes contribute a few percent on top regardless of content type.
-Text-only gains come from CSS minification, tree-shaking, and WOFF2 font conversion.
+CSS and HTML optimizations contribute a minor reduction regardless of book type, while text-only books benefit primarily from CSS cleanup and WOFF2 font conversion.
 
 ---
 
