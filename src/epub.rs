@@ -78,7 +78,9 @@ pub fn repack_epub(assets: &EpubAssets, output: &Path) -> Result<()> {
         zip.write_all(&entry.data)?;
     }
 
-    for entry in assets.html.iter()
+    for entry in assets
+        .html
+        .iter()
         .chain(assets.css.iter())
         .chain(assets.opf.iter())
         .chain(assets.other.iter())
@@ -86,10 +88,24 @@ pub fn repack_epub(assets: &EpubAssets, output: &Path) -> Result<()> {
         if entry.name == "mimetype" {
             continue;
         }
-        zip.start_file(&entry.name, deflated)?;
+        // `other` may hold already-compressed assets (woff2, audio, video) that don't
+        // benefit from DEFLATE; storing them saves CPU at no size cost.
+        let opts = if is_precompressed(&entry.name) {
+            stored
+        } else {
+            deflated
+        };
+        zip.start_file(&entry.name, opts)?;
         zip.write_all(&entry.data)?;
     }
 
     zip.finish()?;
     Ok(())
+}
+
+fn is_precompressed(name: &str) -> bool {
+    matches!(
+        ext(&name.to_lowercase()),
+        "woff" | "woff2" | "mp3" | "mp4" | "m4a" | "aac" | "ogg" | "opus" | "webm" | "mov"
+    )
 }

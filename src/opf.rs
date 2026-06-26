@@ -132,7 +132,8 @@ fn process_item(
                 "media-type" => "font/woff2",
                 _ => v,
             };
-            item.push_attribute((k.as_str(), val));
+            // bytes form: values are already-escaped raw bytes, str form would re-escape
+            item.push_attribute((k.as_bytes(), val.as_bytes()));
         }
         writer
             .write_event(Event::Empty(item))
@@ -140,8 +141,12 @@ fn process_item(
         return Ok(());
     }
 
-    // Image items: swap extension and media-type
-    let is_src_img = matches!(src_ext.as_str(), "jpg" | "jpeg" | "png" | "gif");
+    // Image items: swap extension and media-type. Must match the set re-encoded in
+    // epub.rs/main.rs and rewritten in html.rs, or the manifest goes stale.
+    let is_src_img = matches!(
+        src_ext.as_str(),
+        "jpg" | "jpeg" | "png" | "gif" | "webp" | "avif"
+    );
     let new_href = is_src_img.then(|| swap_ext(&href, img_ext));
     let new_mtype = is_src_img.then(|| format!("image/{img_ext}"));
 
@@ -152,7 +157,7 @@ fn process_item(
             "media-type" => new_mtype.as_deref().unwrap_or(v),
             _ => v,
         };
-        item.push_attribute((k.as_str(), val));
+        item.push_attribute((k.as_bytes(), val.as_bytes()));
     }
     writer
         .write_event(Event::Empty(item))

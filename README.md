@@ -4,11 +4,11 @@
 
 **A command-line EPUB optimizer and compressor**
 
-Clio compresses EPUB files by converting images to AVIF or WebP, removing unused CSS,
+Clio compresses EPUB files by converting images to WebP or AVIF, removing unused CSS,
 upgrading fonts to WOFF2, and rewriting internal HTML.
 You can process single files or entire folders with a single command.
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
 
 [Features](#features) • [Installation](#installation) • [Usage](#usage) • [Results](#results)
@@ -25,7 +25,9 @@ Named after Clio, the Greek muse of history and keeper of stories. This tool aim
 
 ### Image Compression
 
-Clio re-encodes images within the EPUB to AVIF (default) or WebP. It adjusts compression settings based on image resolution and type (treating line art differently than full-color illustrations). Duplicate images across chapters are reused to save space, often resulting in reduction rates around **~90%**.
+Clio re-encodes images within the EPUB to WebP (default) or AVIF. It adjusts compression settings based on image resolution and type (treating line art differently than full-color illustrations). Duplicate images across chapters are reused to save space, often resulting in reduction rates around **~90%**.
+
+Optionally, `--max-dim` downscales oversized images so the longest edge fits a pixel cap (using Lanczos3 resampling), which is useful when source scans are far larger than any reading device can display.
 
 This pipeline is shared with [Thasia](https://github.com/LuMiSxh/Thasia) and has been tested across various images and use cases.
 
@@ -53,11 +55,30 @@ Injects a `<meta property="clio:processed">true</meta>` tag into the OPF file so
 
 ## Installation
 
-### Prerequisites
+### Prebuilt binaries
+
+Download the binary for your platform from the [latest release](https://github.com/LuMiSxh/clio/releases/latest):
+
+| Platform              | Asset                                       |
+| --------------------- | ------------------------------------------- |
+| Linux (x86-64)        | `clio-<version>-x86_64-unknown-linux-gnu`   |
+| macOS (Apple Silicon) | `clio-<version>-aarch64-apple-darwin`       |
+| macOS (Intel)         | `clio-<version>-x86_64-apple-darwin`        |
+| Windows (x86-64)      | `clio-<version>-x86_64-pc-windows-msvc.exe` |
+
+On macOS and Linux, mark it executable and (optionally) put it on your `$PATH`:
+
+```sh
+chmod +x clio-*
+# Optional:
+mv clio-* /usr/local/bin/clio
+```
+
+### Build from source
+
+#### Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) 1.85+ (edition 2024)
-
-### Build
 
 ```sh
 git clone https://github.com/LuMiSxh/clio.git
@@ -80,8 +101,11 @@ clio book.epub
 # Explicit output path
 clio book.epub /somewhere/else/book.epub
 
-# WebP instead of AVIF (better compatibility, ~4% larger)
-clio book.epub --webp
+# AVIF instead of WebP — smaller files, but not in the EPUB 3 spec
+clio book.epub --avif
+
+# Cap the longest image edge to 1600px for even smaller files
+clio book.epub --max-dim 1600
 ```
 
 ### Directory
@@ -90,22 +114,26 @@ clio book.epub --webp
 # Processes every .epub in the folder, writes to ./my-library-optimized/
 clio my-library/
 
-clio my-library/ --webp
+clio my-library/ --avif --max-dim 1600
 ```
 
 ### Options
 
-| Flag     | Description                                           |
-| -------- | ----------------------------------------------------- |
-| `--webp` | Encode images as WebP instead of AVIF                 |
-| `--json` | Output a single JSON object instead of streaming text |
+| Flag        | Description                                                                     |
+| ----------- | ------------------------------------------------------------------------------- |
+| `--avif`    | Encode images as AVIF instead of WebP (~4% smaller, non-standard)               |
+| `--max-dim` | Cap the longest image edge to N pixels (preserves aspect ratio, off by default) |
+| `--json`    | Output a single JSON object instead of streaming text                           |
+
+> [!WARNING]
+> WebP is an officially supported core media type in EPUB 3.3+. AVIF is **not** part of the EPUB 3 specification and is not guaranteed to render in all reading systems. It works in some apps like Apple Books, but use `--avif` only if you know your target reader supports it.
 
 ### What the output looks like
 
 ```
 ── vol-01.epub ──
 Loaded: 24 images  39 html  1 css  1 opf  0 fonts
-   24 images   → avif               (40.3 MB → 3.5 MB, -91%)
+   24 images   → webp               (40.3 MB → 5.2 MB, -87%)
     1 css      → _clio.css          (3 KB → 2 KB, -43%)
    39 html    rewritten
 vol-01.epub → books-optimized/vol-01.epub  [39.5 MB → 3.7 MB  (-91%)]
@@ -154,13 +182,29 @@ Failed books appear in the array as `{"input": "...", "error": "..."}` and are c
 
 The actual reduction rate depends on the volume of images in the source files.
 
-| Content type                        | AVIF    | WebP    |
+| Content type                        | WebP    | AVIF    |
 | ----------------------------------- | ------- | ------- |
-| Image-heavy (manga, illustrated LN) | ~90–93% | ~86–89% |
-| Mixed (some illustrations)          | ~50–75% | ~45–70% |
-| Text-only                           | ~10–30% | ~10–25% |
+| Image-heavy (manga, illustrated LN) | ~86–89% | ~90–93% |
+| Mixed (some illustrations)          | ~45–70% | ~50–75% |
+| Text-only                           | ~10–25% | ~10–30% |
 
 CSS and HTML optimizations contribute a minor reduction regardless of book type, while text-only books benefit primarily from CSS cleanup and WOFF2 font conversion.
+
+### Real-world example
+
+A 15-volume illustrated light novel series (premium EPUBs, **728.8 MB** total):
+
+| Mode                  | Output  | Reduction |
+| --------------------- | ------- | --------- |
+| WebP (default)        | 90.8 MB | −88%      |
+| WebP `--max-dim 1600` | 61.9 MB | −92%      |
+| AVIF                  | 62.3 MB | −91%      |
+| AVIF `--max-dim 1600` | 44.4 MB | −94%      |
+
+WebP with downscaling lands roughly on par with default AVIF, while staying within the EPUB 3 spec.
+
+> [!NOTE]
+> `--max-dim` is off by default and never upscales — images already within the cap are left untouched. It only ever shrinks oversized images, always preserving the original aspect ratio. Because downscaling discards pixels, it is irreversible; pick a cap that comfortably exceeds your reading device's screen resolution (e.g. `1600` for phones and most e-readers).
 
 ---
 

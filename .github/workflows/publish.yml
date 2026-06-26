@@ -1,0 +1,128 @@
+name: publish
+
+on:
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: 'Release tag (e.g. v0.1.0) — must match Cargo.toml version'
+                required: true
+                type: string
+
+env:
+    CARGO_TERM_COLOR: always
+    CARGO_INCREMENTAL: '0'
+
+jobs:
+    validate:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Verify tag matches Cargo.toml version
+              shell: bash
+              run: |
+                  cargo_version="$(grep '^version = ' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')"
+                  tag_version="${{ inputs.tag }}"
+                  tag_version="${tag_version#v}"
+                  if [ "$cargo_version" != "$tag_version" ]; then
+                    echo "::error::Tag ($tag_version) does not match Cargo.toml version ($cargo_version)"
+                    exit 1
+                  fi
+
+    build:
+        needs: validate
+        permissions:
+            contents: read
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - os: macos-latest
+                      target: aarch64-apple-darwin
+                      binary: clio
+                    - os: macos-13
+                      target: x86_64-apple-darwin
+                      binary: clio
+                    - os: ubuntu-22.04
+                      target: x86_64-unknown-linux-gnu
+                      binary: clio
+                    - os: windows-latest
+                      target: x86_64-pc-windows-msvc
+                      binary: clio.exe
+
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install Rust
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.target }}
+
+            - name: Rust cache
+              uses: swatinem/rust-cache@v2
+
+            - name: Build
+              run: cargo build --release --target ${{ matrix.target }}
+
+            - name: Package artifact
+              shell: bash
+              run: |
+                  src="target/${{ matrix.target }}/release/${{ matrix.binary }}"
+                  dst="clio-${{ inputs.tag }}-${{ matrix.target }}"
+                  if [[ "${{ matrix.target }}" == *windows* ]]; then
+                    mv "$src" "${dst}.exe"
+                    echo "ARTIFACT=${dst}.exe" >> "$GITHUB_ENV"
+                  else
+                    mv "$src" "$dst"
+                    echo "ARTIFACT=$dst" >> "$GITHUB_ENV"
+                  fi
+
+            - name: Upload artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: clio-${{ matrix.target }}
+                  path: ${{ env.ARTIFACT }}
+
+    release:
+        needs: build
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Extract changelog for this version
+              id: changelog
+              shell: bash
+              run: |
+                  version="${{ inputs.tag }}"
+                  version="${version#v}"
+                  awk "/^## \[${version}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md > release_notes.md
+                  if [ ! -s release_notes.md ]; then
+                    echo "Clio ${{ inputs.tag }}" > release_notes.md
+                  fi
+                  {
+                    echo 'notes<<EOF'
+                    cat release_notes.md
+                    echo EOF
+                  } >> "$GITHUB_OUTPUT"
+
+            - name: Download all artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  path: artifacts
+                  merge-multiple: true
+
+            - name: Create release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ inputs.tag }}
+                  name: Clio ${{ inputs.tag }}
+                  body: ${{ steps.changelog.outputs.notes }}
+                  draft: true
+                  files: artifacts/*
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

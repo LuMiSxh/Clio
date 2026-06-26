@@ -191,7 +191,8 @@ fn emit_elem(
         if k == "id" {
             selectors.insert(format!("#{v}"));
         }
-        new_e.push_attribute((k.as_str(), v.as_str()));
+        // bytes form: v is already-escaped raw bytes, str form would re-escape
+        new_e.push_attribute((k.as_bytes(), v.as_bytes()));
     }
 
     if !has_class && let Some(ci) = ci_class {

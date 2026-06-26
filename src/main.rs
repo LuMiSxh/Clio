@@ -18,9 +18,12 @@ struct Cli {
     input: PathBuf,
     /// Output path (single-file mode only; default: <stem>-optimized.epub)
     output: Option<PathBuf>,
-    /// Encode images as WebP instead of AVIF
+    /// Encode images as AVIF instead of WebP (non-standard, not in the EPUB 3 spec)
     #[arg(long)]
-    webp: bool,
+    avif: bool,
+    /// Cap the longest image edge to this many pixels (preserves aspect ratio, never upscales)
+    #[arg(long, value_name = "PX")]
+    max_dim: Option<u32>,
     /// Output a single JSON object instead of streaming text
     #[arg(long)]
     json: bool,
@@ -28,16 +31,20 @@ struct Cli {
 
 fn main() {
     let cli = Cli::parse();
-    let format = if cli.webp { encode::Format::Webp } else { encode::Format::Avif };
+    let format = if cli.avif {
+        encode::Format::Avif
+    } else {
+        encode::Format::Webp
+    };
 
     if cli.input.is_dir() {
-        batch(&cli.input, format, cli.json);
+        batch(&cli.input, format, cli.max_dim, cli.json);
     } else {
         let output = cli.output.clone().unwrap_or_else(|| {
             let stem = cli.input.file_stem().unwrap_or_default().to_string_lossy();
             cli.input.with_file_name(format!("{stem}-optimized.epub"))
         });
-        match process_file(&cli.input, &output, format, cli.json) {
+        match process_file(&cli.input, &output, format, cli.max_dim, cli.json) {
             Ok((in_sz, out_sz, stats)) => {
                 if cli.json {
                     println!("{}", book_json(&cli.input, &output, in_sz, out_sz, &stats));
@@ -64,7 +71,7 @@ fn main() {
     }
 }
 
-fn batch(dir: &Path, format: encode::Format, json: bool) {
+fn batch(dir: &Path, format: encode::Format, max_dim: Option<u32>, json: bool) {
     let dir_name = dir.file_name().unwrap_or_default().to_string_lossy();
     let out_dir = dir.with_file_name(format!("{dir_name}-optimized"));
     if let Err(e) = std::fs::create_dir_all(&out_dir) {
@@ -98,7 +105,7 @@ fn batch(dir: &Path, format: encode::Format, json: bool) {
         if !json {
             println!("\n── {} ──", entry.file_name().to_string_lossy());
         }
-        match process_file(&input, &output, format, json) {
+        match process_file(&input, &output, format, max_dim, json) {
             Ok((in_sz, out_sz, stats)) => {
                 if json {
                     book_jsons.push(book_json(&input, &output, in_sz, out_sz, &stats));
@@ -156,14 +163,33 @@ fn process_file(
     input: &Path,
     output: &Path,
     format: encode::Format,
+    max_dim: Option<u32>,
     quiet: bool,
 ) -> error::Result<(u64, u64, RunStats)> {
     let in_sz = std::fs::metadata(input).map(|m| m.len()).unwrap_or(0);
-    let stats = run(input, output, format, quiet)?;
+    let stats = run(input, output, format, max_dim, quiet)?;
     if !quiet {
-        print_stat(stats.img_count, &format!("→ {}", format.ext()), stats.img_orig, stats.img_new, "images");
-        print_stat(stats.font_count, "→ woff2", stats.font_orig, stats.font_new, "fonts");
-        print_stat(stats.css_count, "→ _clio.css", stats.css_orig, stats.css_new, "css");
+        print_stat(
+            stats.img_count,
+            &format!("→ {}", format.ext()),
+            stats.img_orig,
+            stats.img_new,
+            "images",
+        );
+        print_stat(
+            stats.font_count,
+            "→ woff2",
+            stats.font_orig,
+            stats.font_new,
+            "fonts",
+        );
+        print_stat(
+            stats.css_count,
+            "→ _clio.css",
+            stats.css_orig,
+            stats.css_new,
+            "css",
+        );
         if stats.html_count > 0 {
             println!("  {:>3} html    rewritten", stats.html_count);
         }
@@ -183,6 +209,7 @@ fn run(
     input: &std::path::Path,
     output: &std::path::Path,
     format: encode::Format,
+    max_dim: Option<u32>,
     quiet: bool,
 ) -> error::Result<RunStats> {
     use std::collections::HashSet;
@@ -201,7 +228,7 @@ fn run(
 
     let img_orig: u64 = assets.images.iter().map(|e| e.data.len() as u64).sum();
     let img_count = assets.images.len();
-    assets.images = encode_images(assets.images, format)?;
+    assets.images = encode_images(assets.images, format, max_dim)?;
     let img_new: u64 = assets.images.iter().map(|e| e.data.len() as u64).sum();
 
     let font_orig: u64 = assets.fonts.iter().map(|e| e.data.len() as u64).sum();
@@ -220,7 +247,12 @@ fn run(
             .map(|entry| {
                 let css_href = relative_path(&entry.name, &css_archive_path);
                 let result = html::process_html(&entry.data, img_ext, &css_href)?;
-                Ok((entry.name.clone(), result.content, result.css, result.selectors))
+                Ok((
+                    entry.name.clone(),
+                    result.content,
+                    result.css,
+                    result.selectors,
+                ))
             })
             .collect::<error::Result<Vec<_>>>()?
     };
@@ -232,7 +264,10 @@ fn run(
         .map(|(name, content, css, selectors)| {
             global_css.push_str(&css);
             global_selectors.extend(selectors);
-            epub::EpubEntry { name, data: content }
+            epub::EpubEntry {
+                name,
+                data: content,
+            }
         })
         .collect();
 
@@ -258,13 +293,25 @@ fn run(
 
     epub::repack_epub(&assets, output)?;
 
-    Ok(RunStats { img_count, img_orig, img_new, font_count, font_orig, font_new, css_count, css_orig, css_new, html_count })
+    Ok(RunStats {
+        img_count,
+        img_orig,
+        img_new,
+        font_count,
+        font_orig,
+        font_new,
+        css_count,
+        css_orig,
+        css_new,
+        html_count,
+    })
 }
 
 /// Encodes images in parallel, deduplicating by content hash to avoid re-encoding identical bytes.
 fn encode_images(
     images: Vec<epub::EpubEntry>,
     format: encode::Format,
+    max_dim: Option<u32>,
 ) -> error::Result<Vec<epub::EpubEntry>> {
     use rayon::prelude::*;
     use std::collections::HashMap;
@@ -295,7 +342,7 @@ fn encode_images(
         .par_iter()
         .map(|&idx| {
             let e = &images[idx];
-            let (name, data) = encode::process_image(&e.name, &e.data, format)?;
+            let (name, data) = encode::process_image(&e.name, &e.data, format, max_dim)?;
             Ok((idx, epub::EpubEntry { name, data }))
         })
         .collect::<error::Result<Vec<_>>>()?
@@ -415,14 +462,24 @@ struct RunStats {
 }
 
 fn book_json(input: &Path, output: &Path, in_sz: u64, out_sz: u64, s: &RunStats) -> String {
-    let pct = if in_sz > 0 { (1.0 - out_sz as f64 / in_sz as f64) * 100.0 } else { 0.0 };
+    let pct = if in_sz > 0 {
+        (1.0 - out_sz as f64 / in_sz as f64) * 100.0
+    } else {
+        0.0
+    };
     format!(
         r#"{{"input":{},"output":{},"input_bytes":{in_sz},"output_bytes":{out_sz},"reduction_pct":{pct:.1},"images":{{"count":{},"input_bytes":{},"output_bytes":{}}},"fonts":{{"count":{},"input_bytes":{},"output_bytes":{}}},"css":{{"count":{},"input_bytes":{},"output_bytes":{}}},"html":{{"count":{}}}}}"#,
         json_str(&input.to_string_lossy()),
         json_str(&output.to_string_lossy()),
-        s.img_count, s.img_orig, s.img_new,
-        s.font_count, s.font_orig, s.font_new,
-        s.css_count, s.css_orig, s.css_new,
+        s.img_count,
+        s.img_orig,
+        s.img_new,
+        s.font_count,
+        s.font_orig,
+        s.font_new,
+        s.css_count,
+        s.css_orig,
+        s.css_new,
         s.html_count,
     )
 }

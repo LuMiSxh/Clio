@@ -2,6 +2,8 @@
 name = "clio"
 version = "0.1.0"
 edition = "2024"
+authors = ["LuMiSxh"]
+license = "BSD-3-Clause"
 
 [dependencies]
 zip = "2"
