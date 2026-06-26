@@ -4,13 +4,13 @@ on:
     workflow_dispatch:
         inputs:
             tag:
-                description: 'Release tag (e.g. v0.1.0) — must match Cargo.toml version'
+                description: "Release tag (e.g. v0.1.0) — must match Cargo.toml version"
                 required: true
                 type: string
 
 env:
     CARGO_TERM_COLOR: always
-    CARGO_INCREMENTAL: '0'
+    CARGO_INCREMENTAL: "0"
 
 jobs:
     validate:
@@ -42,7 +42,7 @@ jobs:
                     - os: macos-latest
                       target: aarch64-apple-darwin
                       binary: clio
-                    - os: macos-13
+                    - os: macos-latest
                       target: x86_64-apple-darwin
                       binary: clio
                     - os: ubuntu-22.04
